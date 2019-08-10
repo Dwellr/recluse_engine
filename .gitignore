@@ -1,0 +1,14 @@
+/target
+**/*.rs.bk
+Cargo.lock
+
+# Jetbrains IDEs
+.idea/
+**/*.iml
+
+# Misc
+**/.editorconfig
+
+# Visual Studio IDE
+.vs/
+.vscode/
