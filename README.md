@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="https://dotmal.github.io/recluse/img/git-banner.jpg" alt="recluse.io" />
+    <img src="https://karrighan.github.io/recluse/img/git-banner.jpg" alt="recluse.io" />
 </p>
 
 <p align="center">
