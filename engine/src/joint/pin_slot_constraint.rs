@@ -1,53 +1,60 @@
-use std::ops::Range;
 use na::{DVector, RealField, Unit};
+use std::ops::Range;
 
-use crate::object::{BodyPartHandle, BodySet, Body, BodyHandle};
-use crate::solver::{LinearConstraints, GenericNonlinearConstraint, IntegrationParameters,
-                    NonlinearConstraintGenerator};
-use crate::solver::helper;
 use crate::joint::JointConstraint;
 use crate::math::{AngularVector, Point, Vector, DIM, SPATIAL_DIM};
+use crate::object::{BodyPartHandle, BodySet, Body, BodyHandle};
+use crate::solver::helper;
+use crate::solver::{LinearConstraints, GenericNonlinearConstraint, IntegrationParameters,
+                    NonlinearConstraintGenerator};
 
-/// A constraint that removes all degrees of freedom (of one body part relative to a second one) except one translation along an axis and one rotation along the same axis.
-pub struct CylindricalConstraint<N: RealField, Handle: BodyHandle> {
+/// A constraint that removes two translational and two rotational degrees of freedoms.
+///
+/// This is different frmo the cylindrical constraint since the remaining rotation and translation
+/// are not restricted to be done wrt. the same axis.
+pub struct PinSlotConstraint<N: RealField, Handle: BodyHandle> {
     b1: BodyPartHandle<Handle>,
     b2: BodyPartHandle<Handle>,
     anchor1: Point<N>,
     anchor2: Point<N>,
-    axis1: Unit<Vector<N>>,
-    axis2: Unit<Vector<N>>,
+    axis_v1: Unit<Vector<N>>,
+    axis_w1: Unit<Vector<N>>,
+    axis_w2: Unit<Vector<N>>,
     lin_impulses: Vector<N>,
     ang_impulses: AngularVector<N>,
     bilateral_ground_rng: Range<usize>,
     bilateral_rng: Range<usize>,
-
     // min_offset: Option<N>,
     // max_offset: Option<N>,
 }
 
-impl<N: RealField, Handle: BodyHandle> CylindricalConstraint<N, Handle> {
-    /// Creates a cartesian constraint between two body parts.
+impl<N: RealField, Handle: BodyHandle> PinSlotConstraint<N, Handle> {
+    /// Creates a new pin-slot constraint.
     ///
-    /// This will ensure `axis1` and `axis2` always coincide. All the axis and anchors
-    /// are provided on the local space of the corresponding body parts.
+    /// This will ensure the relative linear motions are always along `axis_v1` (here expressed
+    /// in the local coordinate frame of `b1`), and that `axis_w1` and `axis_w2` always coincide.
+    /// All axises and anchors are expressed in the local coordinate frame of their respective body
+    /// part.
     pub fn new(
         b1: BodyPartHandle<Handle>,
         b2: BodyPartHandle<Handle>,
         anchor1: Point<N>,
-        axis1: Unit<Vector<N>>,
+        axis_v1: Unit<Vector<N>>,
+        axis_w1: Unit<Vector<N>>,
         anchor2: Point<N>,
-        axis2: Unit<Vector<N>>,
+        axis_w2: Unit<Vector<N>>,
     ) -> Self {
         // let min_offset = None;
         // let max_offset = None;
 
-        CylindricalConstraint {
+        PinSlotConstraint {
             b1,
             b2,
             anchor1,
             anchor2,
-            axis1,
-            axis2,
+            axis_v1,
+            axis_w1,
+            axis_w2,
             lin_impulses: Vector::zeros(),
             ang_impulses: AngularVector::zeros(),
             bilateral_ground_rng: 0..0,
@@ -87,12 +94,12 @@ impl<N: RealField, Handle: BodyHandle> CylindricalConstraint<N, Handle> {
     //     if let (Some(min_offset), Some(max_offset)) = (self.min_offset, self.max_offset) {
     //         assert!(
     //             min_offset <= max_offset,
-    //             "Cylindrical constraint limits: the min angle must be larger than (or equal to) the max angle.");
+    //             "RevoluteJoint constraint limits: the min angle must be larger than (or equal to) the max angle.");
     //     }
     // }
 }
 
-impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> JointConstraint<N, Bodies> for CylindricalConstraint<N, Handle> {
+impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> JointConstraint<N, Bodies> for PinSlotConstraint<N, Handle> {
     fn num_velocity_constraints(&self) -> usize {
         SPATIAL_DIM - 2
     }
@@ -112,8 +119,8 @@ impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> Join
         constraints: &mut LinearConstraints<N, usize>,
     ) {
         let body1 = try_ret!(bodies.get(self.b1.0));
-        let body2 = try_ret!(bodies.get(self.b2.0));
         let part1 = try_ret!(body1.part(self.b1.1));
+        let body2 = try_ret!(bodies.get(self.b2.0));
         let part2 = try_ret!(body2.part(self.b2.1));
 
         /*
@@ -133,7 +140,8 @@ impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> Join
         let first_bilateral_ground = constraints.bilateral_ground.len();
         let first_bilateral = constraints.bilateral.len();
 
-        let axis1 = pos1 * self.axis1;
+        let axis_v1 = pos1 * self.axis_v1;
+        let axis_w1 = pos1 * self.axis_w1;
 
         helper::restrict_relative_linear_velocity_to_axis(
             body1,
@@ -146,7 +154,7 @@ impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> Join
             assembly_id2,
             &anchor1,
             &anchor2,
-            &axis1,
+            &axis_v1,
             ext_vels,
             self.lin_impulses.as_slice(),
             0,
@@ -165,7 +173,7 @@ impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> Join
             self.b2,
             assembly_id1,
             assembly_id2,
-            &axis1,
+            &axis_w1,
             &anchor1,
             &anchor2,
             ext_vels,
@@ -207,7 +215,7 @@ impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> Join
     }
 }
 
-impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> NonlinearConstraintGenerator<N, Bodies> for CylindricalConstraint<N, Handle> {
+impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> NonlinearConstraintGenerator<N, Bodies> for PinSlotConstraint<N, Handle> {
     fn num_position_constraints(&self, bodies: &Bodies) -> usize {
         // FIXME: calling this at each iteration of the non-linear resolution is costly.
         if self.is_active(bodies) {
@@ -229,16 +237,16 @@ impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> Nonl
         let part1 = body1.part(self.b1.1)?;
         let part2 = body2.part(self.b2.1)?;
 
-        let pos1 = body1.position_at_material_point(part1, &self.anchor1);
-        let pos2 = body2.position_at_material_point(part2, &self.anchor2);
+        let pos1 = part1.position();
+        let pos2 = part2.position();
 
-        let anchor1 = Point::from(pos1.translation.vector);
-        let anchor2 = Point::from(pos2.translation.vector);
-
-        let axis1 = pos1 * self.axis1;
-        let axis2 = pos2 * self.axis2;
+        let anchor1 = pos1 * self.anchor1;
+        let anchor2 = pos2 * self.anchor2;
 
         if i == 0 {
+            let axis1 = pos1 * self.axis_w1;
+            let axis2 = pos2 * self.axis_w2;
+
             return helper::align_axis(
                 parameters,
                 body1,
@@ -256,6 +264,8 @@ impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> Nonl
         }
 
         if i == 1 {
+            let axis = pos1 * self.axis_v1;
+
             return helper::project_anchor_to_axis(
                 parameters,
                 body1,
@@ -266,7 +276,7 @@ impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> Nonl
                 self.b2,
                 &anchor1,
                 &anchor2,
-                &axis1,
+                &axis,
                 jacobians,
             );
         }

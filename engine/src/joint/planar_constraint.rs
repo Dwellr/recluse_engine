@@ -1,100 +1,59 @@
-use std::ops::Range;
 use na::{DVector, RealField, Unit};
+use std::ops::Range;
 
+use crate::joint::JointConstraint;
+use crate::math::{AngularVector, Point};
 use crate::object::{BodyPartHandle, BodySet, Body, BodyHandle};
+use crate::solver::helper;
 use crate::solver::{LinearConstraints, GenericNonlinearConstraint, IntegrationParameters,
                     NonlinearConstraintGenerator};
-use crate::solver::helper;
-use crate::joint::JointConstraint;
-use crate::math::{AngularVector, Point, Vector, DIM, SPATIAL_DIM};
 
-/// A constraint that removes all degrees of freedom (of one body part relative to a second one) except one translation along an axis and one rotation along the same axis.
-pub struct CylindricalConstraint<N: RealField, Handle: BodyHandle> {
+/// A constraint that removes one relative translational degree of freedom, and all but one rotational degrees of freedom.
+///
+/// This ensures a body moves only on a plane wrt. its parent.
+pub struct PlanarConstraint<N: RealField, Handle: BodyHandle> {
     b1: BodyPartHandle<Handle>,
     b2: BodyPartHandle<Handle>,
     anchor1: Point<N>,
     anchor2: Point<N>,
-    axis1: Unit<Vector<N>>,
-    axis2: Unit<Vector<N>>,
-    lin_impulses: Vector<N>,
-    ang_impulses: AngularVector<N>,
+    axis1: Unit<AngularVector<N>>,
+    axis2: Unit<AngularVector<N>>,
+    lin_impulse: N,
+    ang_impulses: [N; 2],
     bilateral_ground_rng: Range<usize>,
     bilateral_rng: Range<usize>,
-
-    // min_offset: Option<N>,
-    // max_offset: Option<N>,
 }
 
-impl<N: RealField, Handle: BodyHandle> CylindricalConstraint<N, Handle> {
-    /// Creates a cartesian constraint between two body parts.
+impl<N: RealField, Handle: BodyHandle> PlanarConstraint<N, Handle> {
+    /// Create a new planar constraint which ensures the two provided axii always coincide.
     ///
-    /// This will ensure `axis1` and `axis2` always coincide. All the axis and anchors
-    /// are provided on the local space of the corresponding body parts.
+    /// All anchros and axii are expressed in their corresponding body part local coordinate frame.
     pub fn new(
         b1: BodyPartHandle<Handle>,
         b2: BodyPartHandle<Handle>,
         anchor1: Point<N>,
-        axis1: Unit<Vector<N>>,
+        axis1: Unit<AngularVector<N>>,
         anchor2: Point<N>,
-        axis2: Unit<Vector<N>>,
+        axis2: Unit<AngularVector<N>>,
     ) -> Self {
-        // let min_offset = None;
-        // let max_offset = None;
-
-        CylindricalConstraint {
+        PlanarConstraint {
             b1,
             b2,
             anchor1,
             anchor2,
             axis1,
             axis2,
-            lin_impulses: Vector::zeros(),
-            ang_impulses: AngularVector::zeros(),
+            lin_impulse: N::zero(),
+            ang_impulses: [N::zero(), N::zero()],
             bilateral_ground_rng: 0..0,
             bilateral_rng: 0..0,
-            // min_offset,
-            // max_offset,
         }
     }
-
-    // pub fn min_offset(&self) -> Option<N> {
-    //     self.min_offset
-    // }
-
-    // pub fn max_offset(&self) -> Option<N> {
-    //     self.max_offset
-    // }
-
-    // pub fn disable_min_offset(&mut self) {
-    //     self.min_offset = None;
-    // }
-
-    // pub fn disable_max_offset(&mut self) {
-    //     self.max_offset = None;
-    // }
-
-    // pub fn enable_min_offset(&mut self, limit: N) {
-    //     self.min_offset = Some(limit);
-    //     self.assert_limits();
-    // }
-
-    // pub fn enable_max_offset(&mut self, limit: N) {
-    //     self.max_offset = Some(limit);
-    //     self.assert_limits();
-    // }
-
-    // fn assert_limits(&self) {
-    //     if let (Some(min_offset), Some(max_offset)) = (self.min_offset, self.max_offset) {
-    //         assert!(
-    //             min_offset <= max_offset,
-    //             "Cylindrical constraint limits: the min angle must be larger than (or equal to) the max angle.");
-    //     }
-    // }
 }
 
-impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> JointConstraint<N, Bodies> for CylindricalConstraint<N, Handle> {
+impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> JointConstraint<N, Bodies> for PlanarConstraint<N, Handle> {
     fn num_velocity_constraints(&self) -> usize {
-        SPATIAL_DIM - 2
+        3
     }
 
     fn anchors(&self) -> (BodyPartHandle<Handle>, BodyPartHandle<Handle>) {
@@ -135,7 +94,7 @@ impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> Join
 
         let axis1 = pos1 * self.axis1;
 
-        helper::restrict_relative_linear_velocity_to_axis(
+        helper::cancel_relative_linear_velocity_wrt_axis(
             body1,
             part1,
             self.b1,
@@ -148,7 +107,7 @@ impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> Join
             &anchor2,
             &axis1,
             ext_vels,
-            self.lin_impulses.as_slice(),
+            self.lin_impulse,
             0,
             ground_j_id,
             j_id,
@@ -169,8 +128,8 @@ impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> Join
             &anchor1,
             &anchor2,
             ext_vels,
-            self.ang_impulses.as_slice(),
-            DIM - 1,
+            &self.ang_impulses[..],
+            1,
             ground_j_id,
             j_id,
             jacobians,
@@ -190,24 +149,24 @@ impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> Join
 
     fn cache_impulses(&mut self, constraints: &LinearConstraints<N, usize>) {
         for c in &constraints.bilateral_ground[self.bilateral_ground_rng.clone()] {
-            if c.impulse_id < DIM {
-                self.lin_impulses[c.impulse_id] = c.impulse;
+            if c.impulse_id == 0 {
+                self.lin_impulse = c.impulse
             } else {
-                self.ang_impulses[c.impulse_id - DIM] = c.impulse;
+                self.ang_impulses[c.impulse_id - 1] = c.impulse;
             }
         }
 
         for c in &constraints.bilateral[self.bilateral_rng.clone()] {
-            if c.impulse_id < DIM {
-                self.lin_impulses[c.impulse_id] = c.impulse;
+            if c.impulse_id == 0 {
+                self.lin_impulse = c.impulse
             } else {
-                self.ang_impulses[c.impulse_id - DIM] = c.impulse;
+                self.ang_impulses[c.impulse_id - 1] = c.impulse;
             }
         }
     }
 }
 
-impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> NonlinearConstraintGenerator<N, Bodies> for CylindricalConstraint<N, Handle> {
+impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> NonlinearConstraintGenerator<N, Bodies> for PlanarConstraint<N, Handle> {
     fn num_position_constraints(&self, bodies: &Bodies) -> usize {
         // FIXME: calling this at each iteration of the non-linear resolution is costly.
         if self.is_active(bodies) {
@@ -236,9 +195,26 @@ impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> Nonl
         let anchor2 = Point::from(pos2.translation.vector);
 
         let axis1 = pos1 * self.axis1;
-        let axis2 = pos2 * self.axis2;
 
         if i == 0 {
+            return helper::cancel_relative_translation_wrt_axis(
+                parameters,
+                body1,
+                part1,
+                self.b1,
+                body2,
+                part2,
+                self.b2,
+                &anchor1,
+                &anchor2,
+                &axis1,
+                jacobians,
+            );
+        }
+
+        if i == 1 {
+            let axis2 = pos2 * self.axis2;
+
             return helper::align_axis(
                 parameters,
                 body1,
@@ -251,22 +227,6 @@ impl<N: RealField, Handle: BodyHandle, Bodies: BodySet<N, Handle = Handle>> Nonl
                 &anchor2,
                 &axis1,
                 &axis2,
-                jacobians,
-            );
-        }
-
-        if i == 1 {
-            return helper::project_anchor_to_axis(
-                parameters,
-                body1,
-                part1,
-                self.b1,
-                body2,
-                part2,
-                self.b2,
-                &anchor1,
-                &anchor2,
-                &axis1,
                 jacobians,
             );
         }
