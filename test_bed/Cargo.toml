@@ -8,4 +8,4 @@ description = "Testbed for the Recluse engine"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rcls_engine = { path = "../engine", version = "1.0.0" }
+recluse = { path = "../engine", version = "1.0.0" }

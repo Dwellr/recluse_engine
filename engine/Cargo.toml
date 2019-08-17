@@ -1,5 +1,5 @@
 [package]
-name = "rcls_engine"
+name = "recluse"
 version = "1.0.0"
 authors = [
     "Malachi Austin <dotmal@zoho.com>",
@@ -32,6 +32,7 @@ downcast-rs = "1.0"
 bitflags   = "1.0"
 ncollide3d = "0.20.1"
 ncollide2d = "0.20.1"
+gfx-hal = "0.3.0"
 
 [target.wasm32-unknown-unknown.dependencies]
 stdweb = {version = "0.4", optional = true}
