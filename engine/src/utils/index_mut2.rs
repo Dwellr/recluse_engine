@@ -20,7 +20,7 @@ pub trait IndexMut2<I> : IndexMut<I> {
 impl<T> IndexMut2<usize> for Vec<T> {
     #[inline]
     fn index_mut2(&mut self, i: usize, j: usize) -> (&mut T, &mut T) {
-        assert!(i != j, "Unable to index the same element twice.");
+        assert_ne!(i, j, "Unable to index the same element twice.");
         assert!(i < self.len() && j < self.len(), "Index is out of bounds.");
 
         unsafe {
