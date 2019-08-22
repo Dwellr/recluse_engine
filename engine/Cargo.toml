@@ -1,11 +1,12 @@
 [package]
 name = "recluse"
-version = "1.0.0"
+version = "1.0.1"
 authors = [
     "Malachi Austin <dotmal@zoho.com>",
     "Malko Jacques <malko.jacques@zoho.com>",
 ]
 edition = "2018"
+homepage = "https://karrighan.github.io/recluse"
 
 [features]
 default = [
@@ -17,22 +18,34 @@ use-wasm-bindgen = [
     "wasm-bindgen",
 ]
 dim3 = [  ]
+xerde = [
+    "serde",
+    "serde_json",
+]
 
 [dependencies]
-either     = "1.0"
-num-traits = "0.2"
-slotmap    = "0.3" # For impulse cache.
-generational-arena = "0.2" # For default body/collide/constraint/force sets.
-smallvec   = "0.6"
-lazy_static = "1.0"
-alga       = "0.9"
-nalgebra   = { version = "0.18", features = [ "sparse" ] }
-approx     = "0.3"
-downcast-rs = "1.0"
-bitflags   = "1.0"
-ncollide3d = "0.20.1"
-ncollide2d = "0.20.1"
-gfx-hal = "0.3.0"
+either                  = "1.0"
+num-traits              = "0.2"
+slotmap                 = "0.3" # For impulse cache.
+generational-arena      = "0.2" # For default body/collide/constraint/force sets.
+smallvec                = "0.6"
+lazy_static             = "1.0"
+alga                    = "0.9"
+nalgebra                = { version = "0.18", features = [ "sparse" ] }
+approx                  = "0.3"
+downcast-rs             = "1.0"
+bitflags                = "1.0"
+ncollide3d              = "0.20.1"
+ncollide2d              = "0.20.1"
+serde                   = { optional = true, version = "1.0.99" }
+serde_json              = { optional = true, version = "1.0.40" }
+gfx-hal                 = "0.3.0"
+gfx-backend-empty       = "0.3.0"
+gfx-backend-dx11        = "0.3.0"
+gfx-backend-dx12        = "0.3.0"
+gfx-backend-gl          = "0.3.0"
+gfx-backend-vulkan      = "0.3.0"
+gfx-backend-metal       = "0.3.1"
 
 [target.wasm32-unknown-unknown.dependencies]
 stdweb = {version = "0.4", optional = true}

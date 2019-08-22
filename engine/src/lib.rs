@@ -1,5 +1,5 @@
 #![crate_name = "recluse"]
-#![crate_type = "lib"]
+#![crate_type = "dylib"]
 #![deny(non_camel_case_types)]
 #![deny(unused_parens)]
 #![deny(non_upper_case_globals)]
@@ -15,8 +15,8 @@
 # The Recluse Game Engine
 
 ## General Info
-Version: 1.0.0
-Revision: 0
+Version: 1.0.1
+Revision: 1
 Release: 0
 
 ## Features
@@ -38,18 +38,6 @@ Release: 0
 - parallel pipeline
 - GPU-based pipeline
 */
-
-#![deny(non_camel_case_types)]
-#![deny(unused_parens)]
-#![deny(non_upper_case_globals)]
-#![deny(unused_qualifications)]
-#![deny(missing_docs)] // FIXME: deny this
-#![deny(unused_results)]
-#![allow(type_alias_bounds)]
-#![warn(non_camel_case_types)]
-#![allow(missing_copy_implementations)]
-#![doc(html_root_url = "http://nphysics.org/rustdoc/")]
-
 
 #[macro_use]
 extern crate approx;
@@ -84,6 +72,14 @@ any(target_arch = "wasm32", target_arch = "asmjs"),
 feature = "use-wasm-bindgen",
 ))]
 extern crate wasm_bindgen;
+
+#[macro_use]
+extern crate bitflags;
+
+#[cfg(feature = "xerde")]
+#[macro_use]
+extern crate serde;
+extern crate serde_json;
 
 //#[cfg(test)]
 //extern crate test;
@@ -242,6 +238,7 @@ pub mod algebra;
 pub mod counters;
 pub mod detection;
 pub mod force_generator;
+pub mod gfx;
 pub mod joint;
 pub mod object;
 pub mod solver;
